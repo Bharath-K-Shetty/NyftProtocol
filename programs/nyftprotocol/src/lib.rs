@@ -1,5 +1,9 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{transfer, Mint, Token, TokenAccount, Transfer},
+};
 use ephemeral_rollups_sdk::anchor::{delegate, ephemeral};
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
 
@@ -27,7 +31,6 @@ pub mod nyft_trade {
 
     /// Step 2: Delegate the PDA to the ephemeral rollup
     pub fn delegate_order(ctx: Context<DelegateOrder>, order_id: u64) -> Result<()> {
-
         ctx.accounts.delegate_pda(
             &ctx.accounts.user,
             &[
@@ -72,23 +75,36 @@ pub mod nyft_trade {
     }
 
     pub fn deposit_tokens(ctx: Context<DepositTokens>, amount: u64) -> Result<()> {
-        let cpi_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            token::Transfer {
-                from: ctx.accounts.user_token_account.to_account_info(),
-                to: ctx.accounts.escrow_token_account.to_account_info(),
-                authority: ctx.accounts.user.to_account_info(),
-            },
+        msg!("Transferring tokens...");
+        msg!("Mint: {}", &ctx.accounts.token_mint.to_account_info().key());
+
+        // let cpi_ctx = CpiContext::new(
+        //     ctx.accounts.token_program.to_account_info(),
+        //     token::Transfer {
+        //         from: ctx.accounts.user_token_account.to_account_info(),
+        //         to: ctx.accounts.escrow_token_account.to_account_info(),
+        //         authority: ctx.accounts.user.to_account_info(),
+        //     },
+        // );
+        // token::transfer(cpi_ctx, amount)?;
+
+        // ctx.accounts.escrow_account.balance = ctx
+        //     .accounts
+        //     .escrow_account
+        //     .balance
+        //     .checked_add(amount)
+        //     .unwrap();
+        transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_token_account.to_account_info(),
+                    to: ctx.accounts.escrow_token_account.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            amount * 10u64.pow(ctx.accounts.token_mint.decimals as u32),
         );
-        token::transfer(cpi_ctx, amount)?;
-
-        ctx.accounts.escrow_account.balance = ctx
-            .accounts
-            .escrow_account
-            .balance
-            .checked_add(amount)
-            .unwrap();
-
         msg!(
             "Deposited {} tokens of mint {} for SELL order {}",
             amount,
@@ -184,18 +200,23 @@ pub struct DepositTokens<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
-    #[account(mut)]
-    pub user_token_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub escrow_token_account: Account<'info, TokenAccount>,
-
     pub token_mint: Account<'info, Mint>,
 
     #[account(mut)]
     pub escrow_account: Account<'info, EscrowAccount>,
 
+    #[account(mut,
+       associated_token::mint = token_mint,
+        associated_token::authority = user)]
+    pub user_token_account: Account<'info, TokenAccount>,
+
+    #[account(init_if_needed,payer=user,associated_token::mint=token_mint,
+    associated_token::authority=escrow_account)]
+    pub escrow_token_account: Account<'info, TokenAccount>,
+
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
 }
 
 /// Delegate PDA to rollup validator

@@ -21,9 +21,9 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = "0.31.1"
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
 ephemeral-rollups-sdk = { version = "0.3.4", features = ["anchor"] }
-
+anchor-spl  = { version = "0.31.1", features = ["metadata"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }
